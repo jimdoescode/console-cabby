@@ -7,8 +7,10 @@
 #define DEFAULT_VEHICLE_COUNT 20
 #define DEFAULT_TIME 500
 #define DEFAULT_FARE_COUNT 3
-#define MAX_FARE_WAIT 75
 
+//The maximum amount of turns a fare
+//will wait to be picked up.
+#define MAX_FARE_WAIT 75
 //What a wall character looks like
 #define WALL '#'
 //Offset to account for left and 
@@ -152,9 +154,8 @@ void drawstatus(int width, int height, Vehicle* player, int shift)
     std::cout << "time runs out.";
     
     if(player->hasfare) {
-        rlutil::setColor(rlutil::RED);
         rlutil::locate(width, 6);
-        std::cout << "Meter is running";
+        std::cout << rlutil::ANSI_RED << "Meter is running" << rlutil::ANSI_ATTRIBUTE_RESET;
     }
 }
 
@@ -258,7 +259,7 @@ int getrandomdirection()
     return left;
 }
 
-int getautomateddirection(Tile *tiles, int sizex, int sizey, int x, int y, int dir)
+int getautomateddirection(Tile *tiles, int sizex, int sizey, int x, int y, int dir, bool reverse)
 {
     int want;
     do {
@@ -268,10 +269,10 @@ int getautomateddirection(Tile *tiles, int sizex, int sizey, int x, int y, int d
     int newx = x;
     int newy = y;
     
-    if(want == up)newy--;
-    else if(want == down)newy++;
-    else if(want == left)newx--;
-    else if(want == right)newx++;
+    if(want == up)        newy += (reverse ? 1 : -1);
+    else if(want == down) newy += (reverse ? -1 : 1);
+    else if(want == left) newx += (reverse ? 1 : -1);
+    else if(want == right)newx += (reverse ? -1 : 1);
     
     //If the wanted position is invalid then try to find another.
     if(newx < 0 || newy < 0 || newx >= sizex || newy >= sizey || tiles[newx*sizey+newy].occupied) {
@@ -279,10 +280,10 @@ int getautomateddirection(Tile *tiles, int sizex, int sizey, int x, int y, int d
         newx = x;
         newy = y;
         
-        if(want == up)newy--;
-        else if(want == down)newy++;
-        else if(want == left)newx--;
-        else if(want == right)newx++;
+        if(want == up)        newy += (reverse ? 1 : -1);
+        else if(want == down) newy += (reverse ? -1 : 1);
+        else if(want == left) newx += (reverse ? 1 : -1);
+        else if(want == right)newx += (reverse ? -1 : 1);
     }
     
     //If we can't find another direction then return none.
@@ -333,7 +334,7 @@ Tile* findrandommovabletile(Tile* tiles, int sizex, int sizey, int dir)
     return NULL;
 }
 
-void movecars(Tile* tiles, int sizex, int sizey, Vehicle* cars, int carcount, char key)
+void movecars(Tile* tiles, int sizex, int sizey, Vehicle* cars, int carcount, char key, bool reverse)
 {
     for(int i=carcount-1; i >= 0; i--) {
         Tile* t = &tiles[cars[i].posx*sizey+cars[i].posy];
@@ -365,12 +366,12 @@ void movecars(Tile* tiles, int sizex, int sizey, Vehicle* cars, int carcount, ch
             //move in that direction. Otherwise try to get another direction.
             dir = (dir == cars[i].direction) ?
                     cars[i].direction :
-                    getautomateddirection(tiles, sizex, sizey, x, y, dir);
+                    getautomateddirection(tiles, sizex, sizey, x, y, dir, reverse);
             
-            if(dir & up)y--;
-            else if(dir & down)y++;
-            else if(dir & left)x--;
-            else if(dir & right)x++;
+            if(dir & up)        y += (reverse ? 1 : -1);
+            else if(dir & down) y += (reverse ? -1 : 1);
+            else if(dir & left) x += (reverse ? 1 : -1);
+            else if(dir & right)x += (reverse ? -1 : 1);
             else continue; //this car can't move, try again next time.
         }
         
@@ -410,7 +411,7 @@ Tile* findrandomfaretile(Tile* tiles, int sizex, int sizey)
         }
         
         //Didn't find any good spots so move along the road.
-        dir = getautomateddirection(tiles, sizex, sizey, x, y, tiles[x*sizey+y].direction);
+        dir = getautomateddirection(tiles, sizex, sizey, x, y, tiles[x*sizey+y].direction, false);
         
         if(dir & up)y--;
         else if(dir & down)y++;
@@ -518,18 +519,61 @@ char** readfile(const char* name, int* rows, int* cols)
 
 int main(int argc, const char* argv[])
 {
-    char key;
-    char** smap;
     int sizex, sizey;
+    char** smap = NULL;
+    int timer = DEFAULT_TIME;
+    bool reverse = false;
+    int viewwidth = DEFAULT_VIEW_WIDTH;
+    int viewheight = DEFAULT_VIEW_HEIGHT;
+    int carcount = DEFAULT_VEHICLE_COUNT;
+    int farecount = DEFAULT_FARE_COUNT;
     
-    if(argc > 2) {
-        for(int i=0; i < argc; i++) {
+    if(argc > 1) {
+        for(int i=1; i < argc; i++) {
             if(strcmp(argv[i], "-f") == 0) {
                 smap = readfile(argv[i+1], &sizey, &sizex);
                 i++;
+            } else if(strcmp(argv[i], "-r") == 0) {
+                reverse = true;
+            } else if(strcmp(argv[i], "-h") == 0) {
+                std::cout << "Console Cabby" << std::endl << "A simple rogue like where you drive around in a taxi, pick up fares, and drop them off at their destination." << std::endl;
+                std::cout << "-cc <int>  " << "Adjust the number of cars on the map." << std::endl;
+                std::cout << "           Default is " << DEFAULT_VEHICLE_COUNT << std::endl;
+                std::cout << "-fc <int>  " << "Adjust the number of fares on the map." << std::endl;
+                std::cout << "           Default is " << DEFAULT_FARE_COUNT << std::endl;
+                std::cout << "-f <path>  " << "Import your own city map file." << std::endl;
+                std::cout << "           Map files are just text files with the characters #1245689:" << std::endl;
+                std::cout << "           Each character represents a direction a car can travel." << std::endl;
+                std::cout << "           '#' means no direction (a wall)" << std::endl;
+                std::cout << "           '1' means cars can only travel up" << std::endl;
+                std::cout << "           '2' means cars can only travel down" << std::endl;
+                std::cout << "           '4' means cars can only travel left" << std::endl;
+                std::cout << "           '5' means cars can either travel up or left" << std::endl;
+                std::cout << "           '6' means cars can either travel down or left" << std::endl;
+                std::cout << "           '8' means cars can only travel right" << std::endl;
+                std::cout << "           '9' means cars can either travel up or right" << std::endl;
+                std::cout << "           ':' means cars can either travel down or right" << std::endl;
+                std::cout << "           All characters should be arranged in a rectangle." << std::endl;
+                std::cout << "-h         " << "Print this help text" << std::endl;
+                std::cout << "-r         " << "Make traffic drive on the other side of the road (for U.K. folks)." << std::endl;
+                std::cout << "-t <int>   " << "Adjust the amount of time before game over." << std::endl;
+                std::cout << "           Default is " << DEFAULT_TIME << std::endl;
+                return 0;
+            } else if(strcmp(argv[i], "-cc") == 0) {
+                carcount = atoi(argv[i+1]);
+                i++;
+            } else if(strcmp(argv[i], "-fc") == 0) {
+                farecount = atoi(argv[i+1]);
+                i++;
+            } else if(strcmp(argv[i], "-t") == 0) {
+                timer = atoi(argv[i+1]);
+                i++;
             }
         }
-    } else {
+    }
+    
+    // If the map wasn't defined as a parameter then load the default.
+    if(smap == NULL) {
         sizex = strlen(builtin[0]);
         sizey = sizeof(builtin) / sizeof(builtin[0]);
         smap = new char*[sizey];
@@ -538,9 +582,6 @@ int main(int argc, const char* argv[])
             strcpy(smap[i], builtin[i]);
         }
     }
-    
-    int viewwidth = DEFAULT_VIEW_WIDTH;
-    int viewheight = DEFAULT_VIEW_HEIGHT;
     
     /**********************************
      ** Init Tiles
@@ -569,7 +610,7 @@ int main(int argc, const char* argv[])
      **********************************/
     
     //Add an extra spot for the player
-    int carcount = DEFAULT_VEHICLE_COUNT+1;
+    carcount++;
     Vehicle* cars = new Vehicle[carcount];
     
     //Add the player car first
@@ -596,7 +637,6 @@ int main(int argc, const char* argv[])
      ** Init Fares
      **********************************/
     
-    int farecount = DEFAULT_FARE_COUNT;
     Fare* fares = new Fare[farecount];
     for(int i=0; i < farecount; i++) {
         fares[i].character = '$';
@@ -609,7 +649,8 @@ int main(int argc, const char* argv[])
         fares[i].pickedup = false;
     }
     
-    int timer = DEFAULT_TIME;
+    char key;
+    
     srand(time(NULL));
     
     rlutil::cls();
@@ -618,7 +659,7 @@ int main(int argc, const char* argv[])
     // Main game loop
     do {
         if(timer > 0) {
-            movecars(tiles, sizex, sizey, cars, carcount, key);
+            movecars(tiles, sizex, sizey, cars, carcount, key, reverse);
             spawnfares(tiles, sizex, sizey, fares, farecount, &cars[0]);
             
             rlutil::resetColor();
