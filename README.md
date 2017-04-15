@@ -54,20 +54,20 @@ There are several options you can pass to adjust the game.
  * `-t <int>` Time. Adjust the starting time.
  
 ## MAKING NEW MAPS ##
-Map files are just text files that use the characters `#1245689:`. Every row of text in the file should be the same length. The `#` represents a wall or non-traversable tile and the numbers represent which direction traffic can move in on that tile. 
+Map files are just text files that use the characters `#1245689:`. Every row of text in the file should be the same length. The `#` represents a wall or non-traversable tile and the numbers represent traversable tiles where the direction of traffic is defined by the number. 
 
 #### Movement Values ####
  * `1` Means a car can only travel UP.
  * `2` Means a car can only travel DOWN.
- * `4` Means a car can only travel RIGHT.
+ * `4` Means a car can only travel LEFT.
  * `5` Means a car can travel either UP or LEFT.
  * `6` Means a car can travel either DOWN or LEFT.
- * `8` Means a car can only travel LEFT.
+ * `8` Means a car can only travel RIGHT.
  * `9` Means a car can travel either UP or RIGHT.
  * `:` Means a car can travel either DOWN or RIGHT.
  
 #### Example ####
-Here's an example with a two way outer ring and two one way cross streets.
+Here's an example with a two way outer ring and two, one way, cross streets.
 ```
 #############################
 #644444444444444444444444445#
