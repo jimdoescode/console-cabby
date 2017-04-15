@@ -12,7 +12,9 @@
 //will wait to be picked up.
 #define MAX_FARE_WAIT 75
 //What a wall character looks like
-#define WALL '#'
+#define WALL_0 '#'
+#define WALL_1 '\\'
+#define WALL_2 '_'
 //Offset to account for left and 
 //right, top and bottom borders
 #define BORDER_OFFSET 2
@@ -133,14 +135,14 @@ void drawdebug(int width, int height, Tile* tiles, int sizex, int sizey, Vehicle
     }
 }
 
-void drawstatus(int width, int height, Vehicle* player, int shift)
+void drawstatus(int width, int height, Vehicle* player, int time)
 {
     width += BORDER_OFFSET * 2;
     height += BORDER_OFFSET * 2;
     rlutil::locate(width, 1);
     std::cout << "CONSOLE CABBIE";
     rlutil::locate(width, 3);
-    std::cout << "TIME:  " << shift;
+    std::cout << "TIME:  " << time;
     rlutil::locate(width, 4);
     std::cout << "MONEY: " << player->money;
     
@@ -187,7 +189,7 @@ void drawview(int width, int height, Tile* tiles, int sizex, int sizey, Vehicle*
     int offsety = cars[0].posy-(height/2);
     for(int y=offsety; y < height+offsety; y++) {
         for(int x=offsetx; x < width+offsetx; x++) {
-            char c = (x >= 0 && y >= 0 && x < sizex && y < sizey) ? tiles[x*sizey+y].character : WALL;
+            char c = (x >= 0 && y >= 0 && x < sizex && y < sizey) ? tiles[x*sizey+y].character : WALL_0;
             int shiftedx = x-offsetx;
             int shiftedy = y-offsety;
             
@@ -224,6 +226,7 @@ void drawview(int width, int height, Tile* tiles, int sizex, int sizey, Vehicle*
         if(fares[i].pickedup) {
             shiftedx = fares[i].destx;
             shiftedy = fares[i].desty;
+            
             rlutil::setColor(rlutil::RED);
         }
         
@@ -234,7 +237,6 @@ void drawview(int width, int height, Tile* tiles, int sizex, int sizey, Vehicle*
             rlutil::locate(shiftedx+BORDER_OFFSET, shiftedy+BORDER_OFFSET);
             std::cout << fares[i].character;
         } else if(fares[i].pickedup) {
-            
             shiftedx = (shiftedx < 0) ? -1 : shiftedx;
             shiftedx = (shiftedx > width) ? width : shiftedx;
             
@@ -485,6 +487,31 @@ void spawnfares(Tile* tiles, int sizex, int sizey, Fare* fares, int farecount, V
     }
 }
 
+void add3dcharacters(Tile* tiles, int sizex, int sizey)
+{
+    for(int x=0; x < sizex; x++) {
+        for(int y=0; y < sizey; y++) {
+            if(tiles[x*sizey+y].direction == none) {
+                continue;
+            }
+            
+            bool topblocked = (y > 0 && tiles[x*sizey+(y-1)].direction == none);
+            bool sideblocked = (x > 0 && tiles[(x-1)*sizey+y].direction == none);
+            
+            //Is this an enclosed corner?
+            if(topblocked && sideblocked) {
+                tiles[(x-1)*sizey+(y-1)].character = WALL_1;
+                tiles[x*sizey+(y-1)].character = WALL_2;
+                tiles[(x-1)*sizey+y].character = WALL_1;
+            } else if(topblocked) {
+                tiles[x*sizey+(y-1)].character = (tiles[(x-1)*sizey+(y-1)].character == WALL_1 ? WALL_2 : WALL_1);
+            } else if(sideblocked) {
+                tiles[(x-1)*sizey+y].character = WALL_1;
+            }
+        }
+    }
+}
+
 char** readfile(const char* name, int* rows, int* cols)
 {
     char** map;
@@ -592,7 +619,7 @@ int main(int argc, const char* argv[])
         for(int y=0; y < sizey; y++) {
             char c = smap[y][x];
             tiles[x*sizey+y].character = c;
-            tiles[x*sizey+y].direction = (c == WALL) ? none : (c - '0');
+            tiles[x*sizey+y].direction = (c == WALL_0) ? none : (c - '0');
             tiles[x*sizey+y].posx = x;
             tiles[x*sizey+y].posy = y;
             tiles[x*sizey+y].occupied  = false;
@@ -604,6 +631,9 @@ int main(int argc, const char* argv[])
         delete [] smap[i];
     }
     delete [] smap;
+    
+    //Adjust wall characters to look kinda 3d
+    add3dcharacters(tiles, sizex, sizey);
     
     /**********************************
      ** Init Cars
